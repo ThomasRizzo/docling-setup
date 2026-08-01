@@ -14,6 +14,8 @@ The scripts also support machines where Hugging Face is blocked. Models can be d
 | `run-pdf-samples.ps1` | Converts PDFs with Tesseract and local Docling models |
 | `pack-huggingface-models.ps1` | Creates a portable model-cache archive |
 | `unpack-huggingface-models.ps1` | Restores that archive on another machine |
+| `start-docling-mcp.py` | Starts the official Docling MCP tools with the tested PDF pipeline |
+| `.codex/config.toml` | Enables the local Docling MCP server for Codex in this project |
 
 ## Requirements
 
@@ -25,6 +27,8 @@ The scripts also support machines where Hugging Face is blocked. Models can be d
 - Approximately 2 GB of free space for Python packages, models, and working output
 
 The setup script installs Python 3.12 and the UB Mannheim Tesseract build when they are missing. It creates an isolated `.venv` and installs Docling from PyPI. By default, Tesseract is installed for the current user in `C:\Tools\Tesseract-OCR`, with user-level environment variables.
+
+It also installs `docling-mcp[local]`. Codex automatically discovers the project MCP configuration after the repository is trusted and Codex is restarted or a new session is opened.
 
 ## Initial setup
 
@@ -115,6 +119,27 @@ Convert every PDF in `pdf-samples`:
 ```powershell
 .\run-pdf-samples.ps1
 ```
+
+## Docling MCP for Codex
+
+The project config starts the official Docling MCP server over stdio in local/offline mode. It exposes the default conversion, generation, and manipulation tool groups, including document conversion, Markdown export, anchor overview/search, and item retrieval.
+
+The `start-docling-mcp.py` launcher replaces only the official local converter factory settings so MCP conversions use the same stable pipeline as the runner:
+
+- `pypdfium2` instead of the native parser that failed on the 40-page sample
+- Tesseract CLI with PDF-aware OCR and English language data
+- accurate TableFormer extraction with cell matching
+- CPU execution with one thread
+- retained page/picture images at scale 2
+- Hugging Face offline mode through `.codex/config.toml`
+
+After setup, restart Codex or open a new session in this repository. Verify discovery from a terminal with:
+
+```powershell
+codex mcp list
+```
+
+The MCP document cache is in memory and lasts for the lifetime of the server process. Convert a PDF first to receive its document key, then use the manipulation tools to inspect anchors or text and the generation tool to export Markdown.
 
 Convert one matching file:
 

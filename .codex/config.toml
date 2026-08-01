@@ -1,0 +1,16 @@
+[mcp_servers.docling]
+command = ".\\.venv\\Scripts\\python.exe"
+args = ["start-docling-mcp.py"]
+startup_timeout_sec = 120
+tool_timeout_sec = 900
+
+[mcp_servers.docling.env]
+DOCLING_MCP_CONVERSION_MODE = "local"
+DOCLING_MCP_KEEP_IMAGES = "true"
+DOCLING_MCP_IMAGES_SCALE = "2.0"
+DOCLING_MCP_DO_OCR = "true"
+DOCLING_MCP_DO_TABLE_STRUCTURE = "true"
+HF_HUB_OFFLINE = "1"
+TRANSFORMERS_OFFLINE = "1"
+HF_HUB_DISABLE_SYMLINKS_WARNING = "1"
+OMP_NUM_THREADS = "1"

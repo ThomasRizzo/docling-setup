@@ -145,18 +145,18 @@ if ($LASTEXITCODE -ne 0) {
     throw 'The existing .venv uses a Python version other than 3.12. Remove it intentionally, then rerun this script.'
 }
 
-& $venvPython -c "import importlib.util; raise SystemExit(0 if importlib.util.find_spec('docling') else 1)"
-$doclingInstalled = $LASTEXITCODE -eq 0
-if ($createdVenv -or -not $doclingInstalled) {
+& $venvPython -c "import importlib.util; raise SystemExit(0 if all(importlib.util.find_spec(name) for name in ('docling', 'docling_mcp')) else 1)"
+$pythonPackagesInstalled = $LASTEXITCODE -eq 0
+if ($createdVenv -or -not $pythonPackagesInstalled) {
     & $venvPython -m pip install --upgrade pip
     if ($LASTEXITCODE -ne 0) { throw 'Failed to upgrade pip.' }
-    & $venvPython -m pip install docling
-    if ($LASTEXITCODE -ne 0) { throw 'Failed to install Docling.' }
+    & $venvPython -m pip install docling 'docling-mcp[local]'
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to install Docling and Docling MCP.' }
 } elseif ($Upgrade) {
-    & $venvPython -m pip install --upgrade pip docling
-    if ($LASTEXITCODE -ne 0) { throw 'Failed to upgrade Docling.' }
+    & $venvPython -m pip install --upgrade pip docling 'docling-mcp[local]'
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to upgrade Docling and Docling MCP.' }
 } else {
-    Write-Host 'Docling is already installed; leaving the environment unchanged.'
+    Write-Host 'Docling and Docling MCP are already installed; leaving the environment unchanged.'
 }
 
 & $venvPython -m pip check
@@ -169,6 +169,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Tesseract validation failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Tesseract language-data validation failed.' }
 & $venvDocling --version
 if ($LASTEXITCODE -ne 0) { throw 'Docling validation failed.' }
+& $venvPython -c "import importlib.metadata as m; print('Docling MCP version:', m.version('docling-mcp'))"
+if ($LASTEXITCODE -ne 0) { throw 'Docling MCP validation failed.' }
 
 if ($ProcessSamples) {
     & (Join-Path $repoRoot 'run-pdf-samples.ps1')

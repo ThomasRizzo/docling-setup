@@ -1,5 +1,9 @@
 """Start Docling MCP with the PDF settings validated by this repository."""
 
+import os
+import shutil
+from pathlib import Path
+
 from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
 from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
 from docling.datamodel.base_models import InputFormat
@@ -13,6 +17,22 @@ from docling.document_converter import DocumentConverter, ImageFormatOption, Pdf
 from docling_mcp.servers.mcp_server import TransportType, main
 from docling_mcp.settings.service_client import settings
 from docling_mcp.tools.converters.local import LocalDocumentConverter
+
+
+def _find_tesseract() -> str:
+    configured = os.environ.get("TESSERACT_CMD")
+    candidates = [
+        configured,
+        shutil.which("tesseract"),
+        r"C:\Tools\Tesseract-OCR\tesseract.exe",
+        str(Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Tesseract-OCR" / "tesseract.exe"),
+    ]
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            return candidate
+    raise RuntimeError(
+        "Tesseract was not found. Run setup-docling.ps1 or set TESSERACT_CMD."
+    )
 
 
 def _get_tuned_converter(self: LocalDocumentConverter) -> DocumentConverter:
@@ -34,6 +54,7 @@ def _get_tuned_converter(self: LocalDocumentConverter) -> DocumentConverter:
     pipeline_options.ocr_options = TesseractCliOcrOptions(
         lang=["eng"],
         mode=OcrMode.PDF_AWARE_LAYOUT_REGIONS,
+        tesseract_cmd=_find_tesseract(),
     )
     pipeline_options.table_structure_options.mode = TableFormerMode.ACCURATE
     pipeline_options.table_structure_options.do_cell_matching = True

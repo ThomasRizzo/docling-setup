@@ -11,6 +11,8 @@ param(
     [string]$PdfBackend = 'pypdfium2',
     [ValidateSet('placeholder', 'embedded', 'referenced')]
     [string]$ImageExportMode = 'referenced',
+    [ValidateSet('md', 'json', 'yaml', 'html', 'html_split_page', 'text', 'doctags', 'doclang', 'dclx')]
+    [string[]]$OutputFormat = @('md', 'html', 'json'),
     [switch]$AllowHuggingFaceNetwork
 )
 
@@ -53,6 +55,7 @@ if ($pdfs.Count -eq 0) {
 $env:PATH = "$tesseractDirectory;$env:PATH"
 $env:TESSDATA_PREFIX = "$($tessdata.TrimEnd('\', '/'))/"
 $env:HF_HUB_DISABLE_SYMLINKS_WARNING = '1'
+$env:OMP_NUM_THREADS = $NumThreads.ToString()
 if (-not $AllowHuggingFaceNetwork) {
     $env:HF_HUB_OFFLINE = '1'
     $env:TRANSFORMERS_OFFLINE = '1'
@@ -64,18 +67,28 @@ $resolvedOutput = (Resolve-Path -LiteralPath $OutputDirectory).Path
 Write-Host "Processing $($pdfs.Count) PDF(s) with Tesseract ($OcrLanguage), batch size $PageBatchSize, $NumThreads thread(s)..." -ForegroundColor Cyan
 foreach ($pdf in $pdfs) {
     Write-Host "`n==> $($pdf.Name)" -ForegroundColor Yellow
-    & $docling convert $pdf.FullName `
-        --from pdf `
-        --to md `
-        --image-export-mode $ImageExportMode `
-        --output $resolvedOutput `
-        --ocr `
-        --ocr-engine tesseract `
-        --ocr-lang $OcrLanguage `
-        --page-batch-size $PageBatchSize `
-        --num-threads $NumThreads `
-        --pdf-backend $PdfBackend `
-        --device cpu
+    $doclingArguments = @('convert', $pdf.FullName, '--from', 'pdf')
+    foreach ($format in $OutputFormat) {
+        $doclingArguments += @('--to', $format)
+    }
+    $doclingArguments += @(
+        '--pipeline', 'standard',
+        '--image-export-mode', $ImageExportMode,
+        '--output', $resolvedOutput,
+        '--ocr',
+        '--ocr-engine', 'tesseract',
+        '--ocr-lang', $OcrLanguage,
+        '--ocr-mode', 'pdf_aware_layout_regions',
+        '--tables',
+        '--table-mode', 'accurate',
+        '--page-batch-size', $PageBatchSize,
+        '--num-threads', $NumThreads,
+        '--pdf-backend', $PdfBackend,
+        '--device', 'cpu',
+        '--abort-on-error'
+    )
+
+    & $docling @doclingArguments
 
     if ($LASTEXITCODE -ne 0) {
         throw "Docling failed for $($pdf.FullName) with exit code $LASTEXITCODE."

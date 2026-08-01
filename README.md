@@ -1,6 +1,6 @@
 # Docling PDF conversion on Windows
 
-This repository sets up [Docling](https://github.com/docling-project/docling) with Tesseract OCR on Windows and converts the PDFs in `pdf-samples` to Markdown. Extracted diagrams are written as referenced PNG files so both the text and visuals are convenient for AI agents.
+This repository sets up [Docling](https://github.com/docling-project/docling) with Tesseract OCR on Windows and converts the PDFs in `pdf-samples` to Markdown, HTML, and lossless Docling JSON. Extracted diagrams are written as referenced PNG files so both the text and visuals are convenient for AI agents.
 
 The scripts also support machines where Hugging Face is blocked. Models can be downloaded on a connected machine, packed into a ZIP, transferred, and restored into the standard Hugging Face cache.
 
@@ -137,12 +137,19 @@ Useful advanced parameters:
 | `FileName` | `*.pdf` | Input filename or wildcard within `pdf-samples` |
 | `OcrLanguage` | `eng` | Tesseract language code |
 | `ImageExportMode` | `referenced` | `referenced` PNGs, base64 `embedded`, or `placeholder` |
+| `OutputFormat` | `md`, `html`, `json` | One or more Docling output formats |
 | `PdfBackend` | `pypdfium2` | PDF parser used by Docling |
 | `PageBatchSize` | `1` | Pages processed per batch |
 | `NumThreads` | `1` | Docling worker threads |
 | `AllowHuggingFaceNetwork` | off | Permit model downloads from Hugging Face |
 
-The conservative page batch and thread defaults reduce memory usage on 16 GB Windows systems. `pypdfium2` is used because Docling's default native parser produced `std::bad_alloc` on later pages of `USBTMC_1_00.pdf`.
+The runner uses Docling's standard pipeline with accurate table structure recognition and PDF-aware Tesseract OCR. PDF-aware mode keeps the PDFs' reliable native text and applies OCR only to layout regions without usable PDF text. The conservative page batch and thread defaults reduce memory usage on 16 GB Windows systems. `pypdfium2` is used because Docling's default native parser produced `std::bad_alloc` on later pages of `USBTMC_1_00.pdf`.
+
+Markdown is the compact agent-facing representation. HTML preserves table `rowspan` and `colspan` semantics that Markdown cannot express. JSON is Docling's lossless structured representation and retains table cells, spans, document hierarchy, provenance, and annotations. To request only selected formats:
+
+```powershell
+.\run-pdf-samples.ps1 -OutputFormat md,json
+```
 
 ## Output
 
@@ -151,12 +158,26 @@ For a source named `example.pdf`, referenced-image mode produces:
 ```text
 output/
 |-- example.md
+|-- example.html
+|-- example.json
 `-- example_artifacts/
     |-- image_000000_....png
     `-- image_000001_....png
 ```
 
 Keep the Markdown file and its `_artifacts` directory together. Markdown links use relative paths.
+
+When JSON is requested with referenced images, Docling also writes one `page_*.png` per PDF page into the artifacts directory. These page renders support visual grounding against the JSON provenance. The `image_*.png` files are the detected diagrams referenced by Markdown and HTML.
+
+## Pipeline choices
+
+The defaults are tuned for the included born-digital USBTMC specifications:
+
+- The standard pipeline preserves deterministic PDF text, layout detection, OCR, and TableFormer table extraction. A VLM pipeline would require substantially more offline model data and is less deterministic for exact technical text.
+- PDF-aware OCR gives native PDF text priority and uses Tesseract for regions without usable embedded text. Full-page OCR is intentionally avoided because it would replace the specifications' reliable text layer.
+- Accurate table mode with cell matching is enabled explicitly. Markdown remains convenient for agents, while HTML preserves row and column spans and JSON preserves Docling's lossless table model and page provenance.
+- Referenced images use Docling's high-resolution export path (scale 2) and produce ordinary PNG files that vision-capable agents can inspect.
+- Code, formula, chart, picture-classification, and picture-description enrichments are disabled. The samples contain no detected code blocks, formulas, or data charts; the remaining flow diagrams are retained as PNGs. Enabling those enrichments would add models, runtime, and possible generated-description errors without improving the source text.
 
 ## Known limitations
 

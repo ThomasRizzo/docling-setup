@@ -23,16 +23,23 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 
 $docling = Join-Path $PSScriptRoot '.venv\Scripts\docling.exe'
 $sampleDirectory = Join-Path $PSScriptRoot 'pdf-samples'
-$tesseractDirectory = Join-Path $env:ProgramFiles 'Tesseract-OCR'
-$tesseract = Join-Path $tesseractDirectory 'tesseract.exe'
-$tessdata = Join-Path $tesseractDirectory 'tessdata'
+$tesseractCommand = Get-Command tesseract.exe -ErrorAction SilentlyContinue
+$tesseractCandidates = @(
+    $(if ($tesseractCommand) { $tesseractCommand.Source }),
+    'C:\Tools\Tesseract-OCR\tesseract.exe',
+    (Join-Path $env:ProgramFiles 'Tesseract-OCR\tesseract.exe'),
+    (Join-Path $env:LOCALAPPDATA 'Programs\Tesseract-OCR\tesseract.exe')
+)
+$tesseract = $tesseractCandidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
 
 if (-not (Test-Path -LiteralPath $docling)) {
     throw 'Docling is not installed. Run .\setup-docling.ps1 first.'
 }
-if (-not (Test-Path -LiteralPath $tesseract)) {
+if (-not $tesseract -or -not (Test-Path -LiteralPath $tesseract)) {
     throw 'Tesseract is not installed. Run .\setup-docling.ps1 first.'
 }
+$tesseractDirectory = Split-Path -Parent $tesseract
+$tessdata = Join-Path $tesseractDirectory 'tessdata'
 if (-not (Test-Path -LiteralPath $sampleDirectory)) {
     throw "PDF sample directory not found: $sampleDirectory"
 }

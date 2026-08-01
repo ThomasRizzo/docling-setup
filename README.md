@@ -21,10 +21,10 @@ The scripts also support machines where Hugging Face is blocked. Models can be d
 - PowerShell 5.1 or PowerShell 7
 - WinGet (`App Installer`)
 - Internet access to PyPI and GitHub during initial setup
-- Administrator approval for the Tesseract installer
+- Write access to `C:\Tools` for the default user-local Tesseract installation, or an elevated shell for a system installation
 - Approximately 2 GB of free space for Python packages, models, and working output
 
-The setup script installs Python 3.12 and the UB Mannheim Tesseract build when they are missing. It creates an isolated `.venv` and installs Docling from PyPI.
+The setup script installs Python 3.12 and the UB Mannheim Tesseract build when they are missing. It creates an isolated `.venv` and installs Docling from PyPI. By default, Tesseract is installed for the current user in `C:\Tools\Tesseract-OCR`, with user-level environment variables.
 
 ## Initial setup
 
@@ -34,6 +34,23 @@ From PowerShell in the repository root:
 Set-ExecutionPolicy -Scope Process Bypass
 .\setup-docling.ps1
 ```
+
+Choose the Tesseract installation scope explicitly when needed:
+
+```powershell
+# Default: user environment, C:\Tools\Tesseract-OCR
+.\setup-docling.ps1 -TesseractInstallScope User
+
+# User environment with a different writable location
+.\setup-docling.ps1 `
+    -TesseractInstallScope User `
+    -TesseractInstallRoot "$env:LOCALAPPDATA\Programs"
+
+# Machine-wide Program Files installation; run PowerShell as administrator
+.\setup-docling.ps1 -TesseractInstallScope System
+```
+
+`C:\Tools` may be protected by organization policy on managed systems. In that case, use a writable `-TesseractInstallRoot` such as the current user's Local AppData directory. The `System` option uses WinGet, installs under Program Files, and writes machine-level `PATH` and `TESSDATA_PREFIX` values.
 
 The script is idempotent. Subsequent runs validate the existing installation without reinstalling or upgrading it. To intentionally update pip and Docling:
 

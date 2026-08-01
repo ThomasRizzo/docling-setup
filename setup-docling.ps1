@@ -1,7 +1,10 @@
 [CmdletBinding()]
 param(
     [switch]$ProcessSamples,
-    [switch]$Upgrade
+    [switch]$Upgrade,
+    [ValidateSet('User', 'System')]
+    [string]$TesseractInstallScope = 'User',
+    [string]$TesseractInstallRoot = 'C:\Tools'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,7 +39,9 @@ function Find-RealPython {
     return $null
 }
 
-function Find-Tesseract {
+function Find-Tesseract([string]$PreferredPath) {
+    if ($PreferredPath -and (Test-Path -LiteralPath $PreferredPath)) { return $PreferredPath }
+
     $command = Get-Command tesseract.exe -ErrorAction SilentlyContinue
     if ($command) { return $command.Source }
 
@@ -55,6 +60,14 @@ if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
     throw 'WinGet is required. Install or update "App Installer" from the Microsoft Store, then rerun this script.'
 }
 
+if ($TesseractInstallScope -eq 'System') {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw 'System Tesseract installation requires an elevated PowerShell session (Run as administrator).'
+    }
+}
+
 Write-Step 'Checking Python 3.12'
 $python = Find-RealPython
 if (-not $python) {
@@ -66,11 +79,34 @@ if (-not $python) { throw 'Python 3.12 was installed but could not be located. O
 Write-Host "Python: $python"
 
 Write-Step 'Checking Tesseract OCR'
-$tesseract = Find-Tesseract
+$userTesseractDirectory = Join-Path $TesseractInstallRoot 'Tesseract-OCR'
+$userTesseract = Join-Path $userTesseractDirectory 'tesseract.exe'
+$preferredTesseract = if ($TesseractInstallScope -eq 'User') {
+    $userTesseract
+} else {
+    Join-Path $env:ProgramFiles 'Tesseract-OCR\tesseract.exe'
+}
+$tesseract = Find-Tesseract $preferredTesseract
 if (-not $tesseract) {
-    winget install --id UB-Mannheim.TesseractOCR --exact --source winget --accept-package-agreements --accept-source-agreements
-    if ($LASTEXITCODE -ne 0) { throw "Tesseract installation failed with exit code $LASTEXITCODE." }
-    $tesseract = Find-Tesseract
+    if ($TesseractInstallScope -eq 'User') {
+        New-Item -ItemType Directory -Path $TesseractInstallRoot -Force | Out-Null
+        $installerUrl = 'https://github.com/UB-Mannheim/tesseract/releases/download/v5.4.0.20240606/tesseract-ocr-w64-setup-5.4.0.20240606.exe'
+        $installerPath = Join-Path ([IO.Path]::GetTempPath()) 'docling-tesseract-ocr-setup.exe'
+        try {
+            Write-Host "Installing Tesseract for the current user in $userTesseractDirectory"
+            Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+            $destinationArgument = "/D=`"$userTesseractDirectory`""
+            $process = Start-Process -FilePath $installerPath -ArgumentList @('/S', $destinationArgument) -Wait -PassThru
+            if ($process.ExitCode -ne 0) { throw "Tesseract installer failed with exit code $($process.ExitCode)." }
+        }
+        finally {
+            if (Test-Path -LiteralPath $installerPath) { Remove-Item -LiteralPath $installerPath -Force }
+        }
+    } else {
+        winget install --id UB-Mannheim.TesseractOCR --exact --source winget --scope machine --accept-package-agreements --accept-source-agreements
+        if ($LASTEXITCODE -ne 0) { throw "Tesseract installation failed with exit code $LASTEXITCODE." }
+    }
+    $tesseract = Find-Tesseract $preferredTesseract
 }
 if (-not $tesseract) { throw 'Tesseract was installed but could not be located. Open a new PowerShell window and rerun this script.' }
 
@@ -81,15 +117,16 @@ if (-not (Test-Path -LiteralPath $tessdataPath)) { throw "Tesseract language dat
 # Configure this process and future shells. Docling expects the trailing slash.
 $env:PATH = "$tesseractDir;$env:PATH"
 $env:TESSDATA_PREFIX = "$($tessdataPath.TrimEnd('\', '/'))/"
-if ([Environment]::GetEnvironmentVariable('TESSDATA_PREFIX', 'User') -ne $env:TESSDATA_PREFIX) {
-    [Environment]::SetEnvironmentVariable('TESSDATA_PREFIX', $env:TESSDATA_PREFIX, 'User')
+$environmentTarget = if ($TesseractInstallScope -eq 'System') { 'Machine' } else { 'User' }
+if ([Environment]::GetEnvironmentVariable('TESSDATA_PREFIX', $environmentTarget) -ne $env:TESSDATA_PREFIX) {
+    [Environment]::SetEnvironmentVariable('TESSDATA_PREFIX', $env:TESSDATA_PREFIX, $environmentTarget)
 }
 
-$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-$userPathParts = @($userPath -split ';' | Where-Object { $_ })
-if ($userPathParts -notcontains $tesseractDir) {
-    $newUserPath = (@($userPathParts) + $tesseractDir) -join ';'
-    [Environment]::SetEnvironmentVariable('Path', $newUserPath, 'User')
+$savedPath = [Environment]::GetEnvironmentVariable('Path', $environmentTarget)
+$savedPathParts = @($savedPath -split ';' | Where-Object { $_ })
+if ($savedPathParts -notcontains $tesseractDir) {
+    $newSavedPath = (@($savedPathParts) + $tesseractDir) -join ';'
+    [Environment]::SetEnvironmentVariable('Path', $newSavedPath, $environmentTarget)
 }
 Write-Host "Tesseract: $tesseract"
 Write-Host "TESSDATA_PREFIX: $env:TESSDATA_PREFIX"

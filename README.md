@@ -15,8 +15,6 @@ The scripts also support machines where Hugging Face is blocked. Models can be d
 | `pack-huggingface-models.ps1` | Creates a portable model-cache archive |
 | `unpack-huggingface-models.ps1` | Restores that archive on another machine |
 
-PDF files under `pdf-samples` are intentionally ignored by Git. This prevents source documents and their metadata from being published accidentally; add or copy input PDFs locally after cloning.
-
 ## Requirements
 
 - Windows 10 or Windows 11, x64

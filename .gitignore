@@ -4,4 +4,3 @@ __pycache__/
 *.py[cod]
 docling-huggingface-models.zip
 *.partial
-pdf-samples/*.pdf
